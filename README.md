@@ -1,6 +1,5 @@
 # RateMyProfessors
-Various insights on data from RateMyProfessors.com
 
-This is an ongoing exploration for fun. Some reports are simply exploratory, while others are more polished.
+This is an ongoing exploration of data from [RateMyProfessors.com](ratemyprofessors.com), mostly for fun.
 
-To date the best report is RateMyProfessors.html, which was copied to index.html and is displayed on Pages
+The best writeup to date is published on Pages, and is in the repo as RateMyProfessors.Rmd
