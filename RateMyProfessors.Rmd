@@ -1,0 +1,175 @@
+---
+title: "RateMyProfessors"
+output: 
+  html_document:
+    theme: cerulean
+    code_folding: hide
+---
+
+# Indroduction
+
+Most current college students are aware of [RateMyProfessors.com](ratemyprofessors.com), the go-to review site for higher ed. Student of their own volition may review both professors and colleges to help future students make decisions. As with any review site, reviews range from scathing to celebratory, but how accurate are they?
+
+As a small introduction to the idea, I took review and teacher data from RateMyProfessors for the entirety of Brigham Young University - Idaho (my alma mater). What follows are the graphical and statistical insights I found most fascinating from this data set.
+
+```{r include=FALSE}
+pacman::p_load(
+  tidyverse,
+  ResourceSelection,
+  car,
+  pander,
+  DT
+)
+
+ratings <- read_csv("byui_ratings.csv")
+prof <- read_csv("byui_professors.csv")
+
+letter_grades <- c("A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F")
+grades <- c("A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F", "P", "INC", "Audit/No Grade", "WD", "Not sure yet")
+
+ratings <- ratings %>% mutate(
+  teacherGrade = factor(teacherGrade, levels = grades, labels = grades)
+)
+
+ratings_numeric <- ratings %>% 
+  mutate(
+    across(where(is.factor), ~as.character(.x)),
+    across(everything(), ~replace(.x, .x == "Yes", 1)),
+    across(everything(), ~replace(.x, .x == "No", 0)),
+    across(everything(), ~replace(.x, .x == "awful", -2)),
+    across(everything(), ~replace(.x, .x == "poor", -1)),
+    across(everything(), ~replace(.x, .x == "average", 0)),
+    across(everything(), ~replace(.x, .x == "good", 1)),
+    across(everything(), ~replace(.x, .x == "awesome", 2))
+  ) %>%  
+  select(where(is.numeric)) %>% 
+  select(!c(id, sId, rOverallString, rEasyString)) %>% 
+  select(where(~!all(is.na(.)))) %>%
+  mutate(rTimestamp = as_datetime(rTimestamp / 1000))
+```
+
+
+### {.tabset .tabset-pills .tabset-fade}
+
+#### Hide
+
+#### Show Data
+
+To collect the data, I found an api on github for web scraping RateMyProfessor, then modified the Python code to fix it and hit it with a hammer until I got what I wanted. It took considerable time because this was my first experience web scraping with Python.
+
+Unfortunately, I forgot to tie the professor name to each review, but the second table shows overall rating and other data collected about professors (in case a professor is interested in looking up what data is collected on them).
+
+```{r}
+datatable(ratings %>% head(500))
+datatable(prof %>% head(500))
+```
+
+### Student Grade Distribution
+
+The data available from RateMyProfessor contains 76,958 student reviews. The largest grouping of people do not list a grade in their review, but there is a disproportionately high number of A's for those who do, and higher grades are more common that lower ones in the reviews given.
+
+```{r}
+ggplot(ratings, aes(teacherGrade)) +
+  geom_bar(fill = "steelblue") +
+  theme_bw() +
+  labs(
+    title = "Student Grades Listed In Review",
+    subtitle = "RateMyProfessor reviews for BYU-Idaho as of December 2024",
+    x = "Letter Grade",
+    y = "Number of Individuals"
+  ) +
+  theme(
+    plot.title = element_text(size = 20)
+  )
+```
+
+```{r}
+table(ratings$teacherGrade) %>% pander()
+```
+
+
+
+### Students' Perspectives are Tied to Grades {.tabset}
+
+#### Average
+
+The graph below shows grade received compared to teacher rating given. Individual reviews are grouped by the grade the reviewer received, then the rating is averaged for each group. This graph contains data across all BYUI student reviews on RateMyProfessor that reported their grade received. There is an incredible, visibly strong linear relationship. 
+
+```{r message=FALSE}
+ratings %>% 
+  group_by(teacherGrade) %>% 
+  summarize(
+    ave_rating = mean(rOverall)
+  ) %>% 
+  ungroup() %>% 
+  filter(teacherGrade %in% letter_grades) %>% 
+  ggplot(aes(teacherGrade, ave_rating)) +
+  geom_point(color = "red", size = 3) +
+  theme_bw() +
+  labs(
+    title = "Students Hate Getting Bad Grades (On Average)",
+    subtitle = "RateMyProfessor reviews for BYU-Idaho as of December 2024\nPoints are average teacher rating given for each grade received",
+    x = "Letter Grade Received",
+    y = "Average Teacher Rating (1-5)"
+  ) +
+  theme(
+    plot.title = element_text(size = 20)
+  )
+```
+
+Interesting to note is the exception to the linear relationship in the D+ rating. This could be because the students failed and are angry that their teacher didn't bump up their grade slightly so they wouldn't have to retake the class.
+
+#### Normalized Density
+
+While the averaged graph is clearest to notice this trend, I find it important to get as close to individual level data as much as reasonable and not rely solely on high level summaries. This 2d density plot shows how many reviews were given with each category combination, normalized by grade category size. We can visibly see that there is a lot of variation in grades received and ratings given, but there is still a visible downward trend.
+
+```{r, warning=FALSE, message=FALSE}
+just_grade_rating <- ratings %>% 
+  select(teacherGrade, rOverall) %>% 
+  filter(teacherGrade %in% letter_grades) %>% 
+  group_by(teacherGrade, rOverall) %>% 
+  summarize(frequency = n())
+
+grade_count <- ratings %>% 
+  group_by(teacherGrade) %>% 
+  summarize(grade_count = n())
+
+# glimpse(grade_count)
+# glimpse(just_grade_rating)
+
+just_grade_rating <- just_grade_rating %>% left_join(grade_count) %>% 
+  mutate(
+    normalized_frequency = frequency / grade_count
+  )
+
+ggplot(just_grade_rating, aes(teacherGrade, rOverall, size = normalized_frequency, color = sqrt(sqrt((normalized_frequency))))) +
+  geom_point() +
+  scale_size(range = c(1, 10)) +
+  scale_color_gradient(low = "#F0FFF0", high = "steelblue") +
+  theme_bw() +
+  labs(
+    title = "Students Hate Getting Bad Grades (Frequently)",
+    subtitle = "RateMyProfessor reviews for BYU-Idaho as of December 2024\nDensity normalized by number of reviews with the same grade received.",
+    x = "Letter Grade Received",
+    y = "Average Teacher Rating (1-5)"
+  ) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = 20)
+  )
+```
+
+To explain more about what this chart is, the upper left point is the number of people that received and A+ and gave the teacher a rating of 5. Then, because we saw that there are a disproportionate number of A+ reviews compared to D reviews, each point is normalized by number of reviews in its grade group. The point with a rating of 5 in the A+ group would be divided by number of people that received an A+. Without normalizing, the chart is a better depiction of number of people that received each grade.
+
+
+### Conclusions
+
+Notably, this demonstration is only correlational, but still useful as a point of interest and investigation. It could be interpreted in several ways:
+
+- Our perspectives are influenced by the system we are in, particularly the grading system in a schooling setting. Giving good grades could potentially impact learning ability (or simply how well they like their teacher).
+- People who like their teachers work harder in their class.
+- People are highly influenced by their emotions and are self-centric.
+- Teachers who grade mercifully are simply more likable people.
+- There is something about the type of measure being used that influences the way the students report. In other words, a general score from 1 to 5 that is simply a "rating". There is nothing specific to what they are rating. That ambiguity might tie the unspecific rating they receive (grade) to the unspecific rating they give.
+
+This analysis doesn't establish causality. There is simply a very interesting correlation. I would suppose the RateMyProfessor rating is not a measure of how good the teacher is, how friendly they are, or how highly esteemed they are. It seems to be all of those things, or a separate measure in and of itself.

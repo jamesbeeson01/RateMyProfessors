@@ -1,0 +1,113 @@
+---
+title: "RateMyProfessors"
+output: 
+  html_document:
+    theme: cerulean
+    code_folding: hide
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+### Introduction
+
+I plan to attend grad school in studying education measurement and evaluation. I am interested in improving education using social science research. There is not a direct path to that type of grad program, so I have tried to avoid an education degree to keep a fresh perspective and favor my research and analysis skills. However, I still want opportunities to relate those skills to education, which I have to do largely with classes and activities outside my major. This curation of classes and activities is my attempt to be an intellectual craftsman.
+
+One of those activities is to work on a research paper with an education professor on campus. We have a few questions we could consider relating RateMyProfessor data to the university survey data. To start that process, I have collected RateMyProfessor data and started to do some analysis. The following insights are the result of all individual ratings for BYU-Idaho.
+
+```{r include=FALSE}
+library(tidyverse)
+library(ResourceSelection) 
+library(car)
+library(pander)
+library(DT)
+
+ratings <- read_csv("byui_ratings.csv")
+prof <- read_csv("byui_professors.csv")
+df <- ratings#left_join(prof, ratings, by = )
+
+letter_grades <- c("A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F")
+grades <- c("A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F", "P", "INC", "Audit/No Grade", "WD", "Not sure yet")
+
+ratings <- ratings %>% mutate(
+  teacherGrade = factor(teacherGrade, levels = grades, labels = grades)
+)
+```
+
+### {.tabset .tabset-pills .tabset-fade}
+
+#### Hide
+
+#### Show Data
+
+To collect the data, I found an api on github for web scraping RateMyProfessor, then modified the Python code to fix it and get what I wanted. It took considerable time because I didn't know how to web scrape...
+
+Unfortunately, I forgot to tie the professor name to each review, but the second table shows overall rating and other data collected about professors (in case a professor is interested in looking up what data is collected on them).
+
+```{r}
+datatable(ratings %>% head(500))
+datatable(prof %>% head(500))
+```
+
+### Student Grade Distribution
+
+The data available from RateMyProfessor contains 76,958 student reviews, which are distributed by grade received as follows:
+
+```{r}
+ggplot(ratings, aes(teacherGrade)) +
+  geom_bar(fill = "steelblue") +
+  theme_bw() +
+  labs(
+    title = "Student Grades Listed In Review",
+    x = "Letter Grade",
+    y = "Number of Individuals"
+  )
+```
+
+```{r}
+table(ratings$teacherGrade) %>% pander()
+```
+
+The largest grouping of people do not list a grade in their review, but there is a disproportionately high number of A's for those who do.
+
+### Students' Perspectives are Tied to Grades
+
+The graph below shows the average review teacher rating group grouped by the grade they received for all BYUI student reviews on RateMyProfessor. There is an incredible, visibly strong linear relationship. 
+
+```{r message=FALSE}
+ratings %>% 
+  group_by(teacherGrade) %>% 
+  summarize(
+    ave_rating = mean(rOverall)
+  ) %>% 
+  ungroup() %>% 
+  filter(teacherGrade %in% letter_grades) %>% 
+  ggplot(aes(teacherGrade, ave_rating)) +
+  geom_point(color = "red", size = 3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_bw() +
+  labs(
+    title = "Students Hate Getting Bad Grades (On Average)",
+    x = "Letter Grade",
+    y = "Average Teacher Rating (1-5)"
+  )
+```
+
+Interesting to note is the exception to the linear relationship in the D+ rating. This could be because the students failed and are angry that their teacher didn't bump up their grade slightly so they wouldn't have to retake the class.
+
+Notably, this demonstration is only correlational, but still useful. It could be interpreted in several ways:
+
+- Our perspectives are influenced by the system we are in, particularly the grading system in a schooling setting. Giving good grades could potentially impact learning, or simply how well they like their teacher. This relates to Sociological Imagination both as a use for social science and a direct application of the theory that a person is directly tied to their milieu.
+- People who like their teachers more work harder in their class. This is another connection to a person's milieu.
+- Teachers who grade mercifully are simply more likable people.
+- People are highly influenced by their emotions and are self-centric.
+- Most people work for grades, and are not intellectual craftsmen over their education.
+
+Potential uses for this social science are to:
+
+- Create awareness of individuals' motivations and malleability to society and bureaucracy
+- Change policy at the university or classroom level to change how grades impact learning and optimism.
+- Identify teachers who give bad grades to implement interventions, or fire them.
+
+More research is needed to determine the cause of this relationship, but it seems to be a worthwhile interest, if not just fascinating to consider.
+

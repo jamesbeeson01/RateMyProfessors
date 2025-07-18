@@ -1,0 +1,122 @@
+---
+title: "RateMyProfessors - Two Departments"
+output: 
+  html_document:
+    theme: cerulean
+    code_folding: hide
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(pander)
+library(DT)
+
+clean <- read_csv("byui_professors.csv")
+# clean$tDept %>% unique()
+
+# Limit data to just 
+prof <- clean %>% 
+  rename(dept = tDept, rating = overall_rating) %>% 
+  mutate(rating = as.numeric(rating)) %>% 
+  filter(dept %in% c("Mathematics", "Sociology"), 
+         rating > 0) %>% 
+  select(dept, tFname, tLname, rating) %>% 
+  drop_na(rating, dept)
+```
+
+## Background
+
+RateMyProfessors is a review site for professors and their universities.
+There is a lot of interesting data they collect including professor
+rating, class difficulty, campus safety and food, and attributes for
+each professor like department. This website is a golden standard for
+students deciding which professor to take a class with.
+
+One thing that is not visible on the website is program or department
+ratings. This analysis reports on and compares the ratings between two
+departments, mathematics and sociology (two departments I am heavily a
+part of).
+
+##  {.tabset .tabset-pills}
+
+### Hide
+
+### Show the Data
+
+```{r}
+datatable(prof)
+```
+
+## Analysis
+
+Is there are difference in professor rating between the mathematics and
+sociology departments? Because RateMyProfessors' ratings are ranked and
+left skewed, we will test the difference in medians using a Wilcoxon
+test with $alpha = 0.05$:
+
+$$
+  H_0:μ_\text{Mathematics} − μ_\text{Sociology} = 0 \\
+  H_a:μ_\text{Mathematics} − μ_\text{Sociology} ≠ 0
+$$
+
+### Test Results
+
+Here are the results of the Wilcoxon test:
+
+```{r, warning=FALSE, message=FALSE}
+wilcox.test(rating ~ dept, data = prof) %>% pander()
+```
+
+With a P-value of 0.6479 compared to $\alpha = 0.05$, there is not a
+significant difference in ratings between departments. This should be no
+surprise when considering the following boxplot and statistics.
+
+```{r}
+prof %>% 
+  rename(Department = dept) %>% 
+  group_by(Department) %>% 
+  summarize(
+    `Median Rating` = median(rating),
+    `Total Ratings` = n()
+  ) %>% pander()
+```
+
+```{r, warning=FALSE, message=FALSE}
+# graph
+prof %>% ggplot(aes(rating, dept)) +
+  geom_boxplot(alpha = 0) +
+  theme_bw() +
+  labs(
+    x = "Professor Rating (out of 5)",
+    y = "",
+    title = "RateMyProfessor Ratings Between BYU-Idaho Departments"
+  )
+```
+
+The distribution of ratings for each department look very similar, and
+the medians are only .1 of a rank apart. This intuitively supports what
+the wilcoxon test found. We cannot reasonably say the two departments
+have different median ranks.
+
+## Conclusion
+
+Given P-value of 0.6479, which is greater than the level of significance
+$\alpha = 0.05$, we fail to reject the null hypothesis. It is not likely
+that the medians for each department are different. Perhaps this is a
+comforting idea to know a student (or professor) is not missing out by
+being in one or the other department.
+
+There are several other interesting tests that could be done with this
+data or by collecting a little more.Of course, we could add more
+departments for comparison. For classes taught by multiple professors,
+another interesting question is whether the class or teacher more
+indicative of a student's rating?
+
+It should be noted that this is the entirety of their data for
+BYU-Idaho, but not every student writes reviews on their website. We
+could reasonably assume this represents the population, with possibility
+for being more extreme. As a point of weakness, the accuracy of this
+data is unknown aside from general intuition.
